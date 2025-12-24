@@ -1,0 +1,67 @@
+2025-12-22 01:35:33,166 - __main__ - INFO - ==================================================
+2025-12-22 01:35:33,167 - __main__ - INFO - 🤖 CRYPTOPULSE ADVANCED SYSTEM
+2025-12-22 01:35:33,167 - __main__ - INFO - ==================================================
+2025-12-22 01:35:37,689 - __main__ - INFO - ==================================================
+2025-12-22 01:35:37,689 - __main__ - INFO - 🤖 CRYPTOPULSE ADVANCED SYSTEM
+2025-12-22 01:35:37,689 - __main__ - INFO - ==================================================
+2025-12-22 01:35:39,533 - __main__ - INFO - 🚀 Запуск улучшенной системы анализа...
+2025-12-22 01:35:39,534 - __main__ - INFO - 👁️ Мониторинг рынка...
+2025-12-22 01:35:39,577 - analytics.market_monitor - INFO - 👁️ Мониторинг всех пар на нескольких биржах...
+2025-12-22 01:35:51,765 - analytics.market_monitor - WARNING - ❌ Ошибка получения данных с kucoin: kucoin fetchOrderBook() limit argument must be 20 or 100
+2025-12-22 01:35:55,241 - analytics.market_monitor - WARNING - ❌ Ошибка получения данных с okx: too many values to unpack (expected 2)
+2025-12-22 01:35:55,258 - analytics.market_monitor - INFO - ✅ BTC/USDT: $88351.28 (discrepancy: 0.00%)
+2025-12-22 01:35:58,208 - analytics.market_monitor - WARNING - ❌ Ошибка получения данных с kucoin: kucoin fetchOrderBook() limit argument must be 20 or 100
+2025-12-22 01:35:59,439 - analytics.market_monitor - WARNING - ❌ Ошибка получения данных с okx: too many values to unpack (expected 2)
+2025-12-22 01:35:59,440 - analytics.market_monitor - INFO - ✅ ETH/USDT: $2986.76 (discrepancy: 0.03%)
+2025-12-22 01:36:02,101 - analytics.market_monitor - WARNING - ❌ Ошибка получения данных с kucoin: kucoin fetchOrderBook() limit argument must be 20 or 100
+2025-12-22 01:36:03,331 - analytics.market_monitor - WARNING - ❌ Ошибка получения данных с okx: too many values to unpack (expected 2)
+2025-12-22 01:36:03,332 - analytics.market_monitor - INFO - ✅ BNB/USDT: $854.26 (discrepancy: 0.02%)
+2025-12-22 01:36:03,332 - __main__ - INFO - ✅ Мониторинг завершен. Данные с 3 пар
+2025-12-22 01:36:03,332 - __main__ - INFO - 🔍 Генерация сигналов...
+2025-12-22 01:36:03,343 - core.advanced_signal_generator - INFO - 🚀 Запуск улучшенного анализа...
+2025-12-22 01:36:05,912 - core.advanced_signal_generator - INFO - 🔍 Анализирую BTC/USDT...
+2025-12-22 01:36:07,123 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:07,123 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:07,124 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:07,124 - core.advanced_signal_generator - INFO - 🔍 Анализирую ETH/USDT...
+2025-12-22 01:36:08,266 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:08,267 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:08,267 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:08,268 - core.advanced_signal_generator - INFO - 🔍 Анализирую BNB/USDT...
+2025-12-22 01:36:09,475 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:09,475 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:09,476 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:09,476 - core.advanced_signal_generator - INFO - 🔍 Анализирую SOL/USDT...
+2025-12-22 01:36:10,558 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:10,559 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:10,560 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:10,560 - core.advanced_signal_generator - INFO - 🔍 Анализирую XRP/USDT...
+2025-12-22 01:36:11,577 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:11,577 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:11,578 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:11,579 - core.advanced_signal_generator - INFO - 🔍 Анализирую ADA/USDT...
+2025-12-22 01:36:12,755 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:12,756 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:12,757 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:12,758 - core.advanced_signal_generator - INFO - 🔍 Анализирую AVAX/USDT...
+2025-12-22 01:36:14,299 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:14,299 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:14,300 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:14,300 - core.advanced_signal_generator - INFO - 🔍 Анализирую DOGE/USDT...
+2025-12-22 01:36:15,476 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:15,477 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:15,478 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:15,478 - core.advanced_signal_generator - INFO - 🔍 Анализирую DOT/USDT...
+2025-12-22 01:36:16,924 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:16,925 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:16,925 - core.advanced_signal_generator - ERROR - Ошибка анализа таймфрейма: invalid index to scalar variable.
+2025-12-22 01:36:16,925 - core.advanced_signal_generator - INFO - 🔍 Анализирую MATIC/USDT...
+2025-12-22 01:36:16,926 - core.advanced_signal_generator - ERROR - Ошибка получения данных MATIC/USDT 15m: bybit does not have market symbol MATIC/USDT
+2025-12-22 01:36:16,926 - core.advanced_signal_generator - ERROR - Ошибка получения данных MATIC/USDT 1h: bybit does not have market symbol MATIC/USDT
+2025-12-22 01:36:16,926 - core.advanced_signal_generator - ERROR - Ошибка получения данных MATIC/USDT 4h: bybit does not have market symbol MATIC/USDT
+2025-12-22 01:36:16,926 - core.advanced_signal_generator - INFO - 📊 Анализ завершен. Найдено 0 сигналов
+2025-12-22 01:36:16,926 - __main__ - INFO - ✅ Сгенерировано 0 сигналов
+2025-12-22 01:36:16,926 - __main__ - INFO - 📊 Оценка качества сигналов...
+2025-12-22 01:36:16,953 - __main__ - INFO - 🎯 Анализ завершен успешно!
+2025-12-22 01:36:17,094 - __main__ - INFO - 📭 Качественных сигналов не найдено
+2025-12-22 01:36:17,094 - __main__ - INFO - 👋 Завершение работы...

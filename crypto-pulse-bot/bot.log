@@ -1,0 +1,100 @@
+2025-12-22 00:31:04,474 - __main__ - INFO - 🚀 Запуск CryptoPulse системы...
+2025-12-22 00:31:04,495 - __main__ - INFO - ✅ Основной бот запущен
+2025-12-22 00:31:07,503 - __main__ - INFO - ✅ Market Worker запущен
+2025-12-22 00:31:07,503 - __main__ - INFO - 🎯 Все компоненты запущены! Система работает.
+2025-12-22 00:31:09,885 - __mp_main__ - INFO - 📈 Запускаю Market Worker...
+2025-12-22 00:31:09,886 - market_worker - INFO - 🚀 Market Worker запущен!
+2025-12-22 00:31:09,887 - market_worker - INFO - 📂 Подключаюсь к базе данных...
+2025-12-22 00:31:09,892 - database - INFO - ✅ Таблицы БД созданы/проверены
+2025-12-22 00:31:09,893 - database - INFO - ✅ База данных SQLite подключена
+2025-12-22 00:31:09,893 - market_worker - INFO - ✅ База данных подключена успешно
+2025-12-22 00:31:09,904 - market_worker - INFO - 📊 Мониторю пары: ['BTC/USDT', 'ETH/USDT', 'BNB/USDT']
+2025-12-22 00:31:09,904 - market_worker - INFO - ⏳ Первый анализ начнётся через 10 секунд...
+2025-12-22 00:31:19,913 - market_worker - INFO - 🔍 Начинаю цикл анализа рынка...
+2025-12-22 00:31:23,562 - market_worker - INFO - 📈 Сгенерирован сигнал для BTCUSDT: LONG (RSI Oversold (11.3))
+2025-12-22 00:31:23,577 - market_worker - ERROR - Ошибка в цикле для BTC/USDT: name 'signal_id' is not defined
+2025-12-22 00:31:23,922 - market_worker - INFO - 📈 Сгенерирован сигнал для ETHUSDT: SHORT (EMA Death Cross (20/50))
+2025-12-22 00:31:23,927 - market_worker - ERROR - Ошибка в цикле для ETH/USDT: name 'signal_id' is not defined
+2025-12-22 00:31:24,277 - market_worker - INFO - 📈 Сгенерирован сигнал для BNBUSDT: SHORT (RSI Overbought (100))
+2025-12-22 00:31:24,282 - market_worker - ERROR - Ошибка в цикле для BNB/USDT: name 'signal_id' is not defined
+2025-12-22 00:31:24,282 - market_worker - INFO - Цикл анализа завершён. Сгенерировано сигналов: 3
+2025-12-22 00:31:24,283 - market_worker - INFO - ⏰ Следующий анализ через 5 минут...
+2025-12-22 00:33:35,161 - ccxt.base.exchange - WARNING - bybit requires to release all resources with an explicit call to the .close() coroutine. If you are using the exchange instance with async coroutines, add `await exchange.close()` to your code into a place when you're done with the exchange and don't need the exchange instance anymore (at the end of your async coroutine).
+2025-12-22 00:33:35,163 - asyncio - ERROR - Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x00000236082C8350>
+2025-12-22 00:33:35,397 - __main__ - INFO - 🛑 Остановка системы...
+2025-12-22 00:33:35,398 - __main__ - INFO - ✅ Система остановлена
+2025-12-22 00:33:35,941 - __main__ - INFO - 🚀 Запуск CryptoPulse системы...
+2025-12-22 00:33:35,956 - __main__ - INFO - ✅ Основной бот запущен
+2025-12-22 00:33:38,964 - __main__ - INFO - ✅ Market Worker запущен
+2025-12-22 00:33:38,964 - __main__ - INFO - 🎯 Все компоненты запущены! Система работает.
+2025-12-22 00:33:41,136 - __mp_main__ - INFO - 📈 Запускаю Market Worker...
+2025-12-22 00:33:41,138 - market_worker - INFO - 🚀 Market Worker запущен!
+2025-12-22 00:33:41,138 - market_worker - INFO - 📂 Подключаюсь к базе данных...
+2025-12-22 00:33:41,143 - database - INFO - ✅ Таблицы БД созданы/проверены
+2025-12-22 00:33:41,144 - database - INFO - ✅ База данных SQLite подключена
+2025-12-22 00:33:41,144 - market_worker - INFO - ✅ База данных подключена успешно
+2025-12-22 00:33:41,156 - market_worker - INFO - 📊 Мониторю пары: ['BTC/USDT', 'ETH/USDT', 'BNB/USDT']
+2025-12-22 00:33:41,157 - market_worker - INFO - ⏳ Первый анализ начнётся через 10 секунд...
+2025-12-22 00:33:42,861 - services.payments - INFO - ✅ CryptoPay инициализирован (testnet=True)
+2025-12-22 00:33:43,614 - __mp_main__ - INFO - 🤖 Запускаю основного бота...
+2025-12-22 00:33:43,615 - bot - INFO - Запуск бота CryptoPulse...
+2025-12-22 00:33:43,618 - database - INFO - ✅ Таблицы БД созданы/проверены
+2025-12-22 00:33:43,618 - database - INFO - ✅ База данных SQLite подключена
+2025-12-22 00:33:43,619 - bot - INFO - ✅ База данных подключена
+2025-12-22 00:33:43,619 - bot - INFO - ✅ Фоновая проверка платежей запущена
+2025-12-22 00:33:43,619 - bot - INFO - ✅ Фоновая проверка новых сигналов запущена
+2025-12-22 00:33:43,619 - bot - INFO - 🤖 Бот запущен и ожидает сообщений...
+2025-12-22 00:33:43,619 - aiogram.dispatcher - INFO - Start polling
+2025-12-22 00:33:43,620 - services.payment_checker - INFO - 🔍 Проверяю 2 pending платежей...
+2025-12-22 00:33:44,355 - bot - INFO - 🔍 Запущена фоновая проверка новых сигналов
+2025-12-22 00:33:44,613 - aiogram.dispatcher - INFO - Run polling for bot @CryptoPulse_helperbot id=8218863552 - 'CryptoPulse'
+2025-12-22 00:33:44,659 - services.payments - INFO - ✅ Статус счета 798636: active
+2025-12-22 00:33:44,745 - services.payments - INFO - ✅ Статус счета 798640: active
+2025-12-22 00:33:51,164 - market_worker - INFO - 🔍 Начинаю цикл анализа рынка...
+2025-12-22 00:33:52,785 - bot - INFO - Новый пользователь: 924451210
+2025-12-22 00:33:53,214 - aiogram.event - INFO - Update id=601925536 is handled. Duration 437 ms by bot id=8218863552
+2025-12-22 00:33:54,260 - market_worker - INFO - 📈 Сгенерирован сигнал для BTCUSDT: LONG (RSI Oversold (11.3))
+2025-12-22 00:33:54,269 - market_worker - ERROR - Ошибка в цикле для BTC/USDT: name 'signal_id' is not defined
+2025-12-22 00:33:54,499 - aiogram.event - INFO - Update id=601925537 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:33:54,622 - market_worker - INFO - 📈 Сгенерирован сигнал для ETHUSDT: SHORT (EMA Death Cross (20/50))
+2025-12-22 00:33:54,629 - market_worker - ERROR - Ошибка в цикле для ETH/USDT: name 'signal_id' is not defined
+2025-12-22 00:33:54,988 - market_worker - INFO - 📈 Сгенерирован сигнал для BNBUSDT: SHORT (RSI Overbought (100))
+2025-12-22 00:33:54,995 - market_worker - ERROR - Ошибка в цикле для BNB/USDT: name 'signal_id' is not defined
+2025-12-22 00:33:54,996 - market_worker - INFO - Цикл анализа завершён. Сгенерировано сигналов: 3
+2025-12-22 00:33:54,996 - market_worker - INFO - ⏰ Следующий анализ через 5 минут...
+2025-12-22 00:33:58,127 - aiogram.event - INFO - Update id=601925538 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:33:59,321 - aiogram.event - INFO - Update id=601925539 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:00,506 - aiogram.event - INFO - Update id=601925540 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:02,017 - aiogram.event - INFO - Update id=601925541 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:02,499 - aiogram.event - INFO - Update id=601925542 is handled. Duration 125 ms by bot id=8218863552
+2025-12-22 00:34:02,876 - aiogram.event - INFO - Update id=601925543 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:04,347 - aiogram.event - INFO - Update id=601925544 is handled. Duration 187 ms by bot id=8218863552
+2025-12-22 00:34:05,344 - aiogram.event - INFO - Update id=601925545 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:06,294 - aiogram.event - INFO - Update id=601925546 is not handled. Duration 14 ms by bot id=8218863552
+2025-12-22 00:34:07,753 - aiogram.event - INFO - Update id=601925547 is handled. Duration 109 ms by bot id=8218863552
+2025-12-22 00:34:08,318 - aiogram.event - INFO - Update id=601925548 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:09,675 - aiogram.event - INFO - Update id=601925549 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:10,631 - aiogram.event - INFO - Update id=601925550 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:11,975 - aiogram.event - INFO - Update id=601925551 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:12,434 - aiogram.event - INFO - Update id=601925552 is not handled. Duration 15 ms by bot id=8218863552
+2025-12-22 00:34:13,116 - aiogram.event - INFO - Update id=601925553 is handled. Duration 110 ms by bot id=8218863552
+2025-12-22 00:34:13,603 - aiogram.event - INFO - Update id=601925554 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:14,519 - aiogram.event - INFO - Update id=601925555 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:14,874 - aiogram.event - INFO - Update id=601925556 is not handled. Duration 0 ms by bot id=8218863552
+2025-12-22 00:34:15,168 - aiogram.event - INFO - Update id=601925557 is not handled. Duration 14 ms by bot id=8218863552
+2025-12-22 00:34:44,761 - services.payment_checker - INFO - 🔍 Проверяю 2 pending платежей...
+2025-12-22 00:34:45,059 - services.payments - INFO - ✅ Статус счета 798636: active
+2025-12-22 00:34:45,102 - services.payments - INFO - ✅ Статус счета 798640: active
+2025-12-22 00:35:45,097 - services.payment_checker - INFO - 🔍 Проверяю 2 pending платежей...
+2025-12-22 00:35:45,281 - services.payments - INFO - ✅ Статус счета 798636: active
+2025-12-22 00:35:45,378 - services.payments - INFO - ✅ Статус счета 798640: active
+2025-12-22 00:36:26,483 - aiogram.dispatcher - INFO - Polling stopped
+2025-12-22 00:36:26,512 - ccxt.base.exchange - WARNING - bybit requires to release all resources with an explicit call to the .close() coroutine. If you are using the exchange instance with async coroutines, add `await exchange.close()` to your code into a place when you're done with the exchange and don't need the exchange instance anymore (at the end of your async coroutine).
+2025-12-22 00:36:26,515 - asyncio - ERROR - Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x000002704F983980>
+2025-12-22 00:36:26,748 - aiogram.dispatcher - INFO - Polling stopped for bot @CryptoPulse_helperbot id=8218863552 - 'CryptoPulse'
+2025-12-22 00:36:27,046 - asyncio - ERROR - Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x000002B8A06BE660>
+2025-12-22 00:36:27,378 - __main__ - INFO - 🛑 Остановка системы...
+2025-12-22 00:36:27,380 - __main__ - INFO - ✅ Система остановлена
