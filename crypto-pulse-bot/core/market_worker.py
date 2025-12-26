@@ -56,7 +56,15 @@ def calculate_position_size(deposit, risk_pct, entry, sl):
 class MarketWorker:
     def __init__(self, bot: Bot):
         self.bot = bot
-        self.gen = AdvancedSignalGenerator()
+
+        # Создаем конфигурацию для биржи
+        exchange_config = {
+            'exchange': 'bybit',  # или другая биржа из config
+            'api_key': getattr(config, 'BYBIT_API_KEY', ''),
+            'api_secret': getattr(config, 'BYBIT_API_SECRET', ''),
+        }
+
+        self.gen = AdvancedSignalGenerator(exchange_config=exchange_config, symbols=[])
         self.tracker = SignalTracker(bot)
         self.formatter = EnhancedSignalFormatter()
         self._tasks = []
