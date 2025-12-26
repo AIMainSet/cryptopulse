@@ -11,6 +11,7 @@ from database import init_db
 # Настройка команд в меню возле поля ввода
 async def set_main_menu(bot: Bot):
     commands = [
+        BotCommand(command='/start', description='Перезапустить бота'),
         BotCommand(command='/menu', description='Главное меню'),
         BotCommand(command='/signals', description='Активные сигналы'),
         BotCommand(command='/settings', description='Настройки'),
