@@ -123,11 +123,35 @@ class SignalQualityRater:
         else:
             return 0.2
 
-    async def rate_market_structure(self, symbol: str, direction: str) -> float:
-        """Оценка рыночной структуры"""
-        # Проверка тренда, уровней поддержки/сопротивления и т.д.
-        # Пока возвращаем базовый score
-        return 0.6
+    async def rate_market_structure(self, symbol: str, direction: str, signal_data: Dict = None) -> float:
+        """Оценка рыночной структуры с использованием индикаторов"""
+        if not signal_data:
+            return 0.6  # Возвращаем базовый score если нет данных
+
+        score = 0.5  # Базовый score
+
+        # 1. Оценка по Bollinger Bands
+        bb_position = signal_data.get('bb_position', 'middle')
+        if (direction == 'BUY' and bb_position == 'lower') or \
+                (direction == 'SELL' and bb_position == 'upper'):
+            score += 0.2  # Цена у границы Боллинджера - хорошая точка входа
+
+        # 2. Оценка по MACD
+        macd_value = signal_data.get('macd_value', 0)
+        macd_signal = signal_data.get('macd_signal', 0)
+
+        if (direction == 'BUY' and macd_value > macd_signal) or \
+                (direction == 'SELL' and macd_value < macd_signal):
+            score += 0.15  # MACD подтверждает направление
+
+        # 3. Оценка по Stochastic
+        stoch_k = signal_data.get('stoch_k', 50)
+        if direction == 'BUY' and stoch_k < 30:
+            score += 0.1  # Stochastic в зоне перепроданности для покупки
+        elif direction == 'SELL' and stoch_k > 70:
+            score += 0.1  # Stochastic в зоне перекупленности для продажи
+
+        return min(score, 1.0)  # Ограничиваем максимальный score 1.0
 
     def rate_volatility(self, volatility_str: str) -> float:
         """Оценка волатильности"""
