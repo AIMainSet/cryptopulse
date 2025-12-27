@@ -1,6 +1,5 @@
 import pandas as pd
 import pandas_ta as ta
-import ccxt.async_support as ccxt
 import asyncio
 import logging
 from typing import Optional, Dict, List
@@ -11,25 +10,19 @@ logger = logging.getLogger(__name__)
 
 
 class AdvancedSignalGenerator:
-    def __init__(self, exchange_config: Dict, symbols: List[str] = None):
-        """Инициализация с конфигурацией, а не жесткими значениями"""
-        exchange_name = exchange_config.get('exchange', 'bybit')
-        self.exchange = getattr(ccxt, exchange_name)({
-            'enableRateLimit': True,
-            'apiKey': exchange_config.get('api_key', ''),
-            'secret': exchange_config.get('api_secret', ''),
-            'options': {'defaultType': 'spot'}
-        })
+    def __init__(self, exchange, symbols: List[str] = None):
+        """Принимаем готовую биржу вместо конфигурации"""
+        self.exchange = exchange
 
         self.symbols = symbols or []
         self.signal_rater = SignalQualityRater()
 
         # Конфигурируемые параметры
-        self.MIN_VOLUME = 5_000_000
+        self.MIN_VOLUME = 500_000
         self.LOOKBACK_BARS = 20
         self.ATR_SL_MULT = 1.5
         self.MIN_RR = 1.5
-        self.MIN_SCORE = 60
+        self.MIN_SCORE = 30
 
     def update_symbols(self, new_symbols: List[str]):
         """Безопасное обновление списка пар"""
@@ -46,7 +39,8 @@ class AdvancedSignalGenerator:
             logger.info(f"📋 Обновлен список пар: {self.symbols[:5]}..." +
                         (f" и еще {len(self.symbols) - 5}" if len(self.symbols) > 5 else ""))
 
-    async def _calculate_indicators(self, df: pd.DataFrame, symbol: str) -> Optional[pd.DataFrame]:
+    @staticmethod
+    def _calculate_indicators(df: pd.DataFrame, symbol: str) -> Optional[pd.DataFrame]:
         """Безопасный расчет всех индикаторов"""
         try:
             # Базовые индикаторы
@@ -67,7 +61,7 @@ class AdvancedSignalGenerator:
             df['macd_hist'] = macd_df['MACDh_12_26_9']
 
             # Bollinger Bands
-            bb_df = ta.bbands(df['close'], length=20, std=2)
+            bb_df = ta.bbands(df['close'], length=20, std=2) # type: ignore
             # Ищем правильные имена колонок
             for suffix in ['_20_2.0', '_20_2']:
                 upper_col = f'BBU{suffix}'
@@ -93,6 +87,9 @@ class AdvancedSignalGenerator:
             df['stoch_k'] = stoch_df['STOCHk_14_3_3']
             df['stoch_d'] = stoch_df['STOCHd_14_3_3']
 
+            logger.info(
+                f"📈 {symbol}: RSI последнее значение = {df['rsi'].iloc[-1] if not df['rsi'].isnull().all() else 'N/A'}")
+
             return df
 
         except Exception as e:
@@ -105,6 +102,8 @@ class AdvancedSignalGenerator:
         buy_reasons = []
         sell_score = 0
         sell_reasons = []
+
+        logger.info(f"🔍 Начало оценки условий...")
 
         # Трендовые условия
         if last['close'] > last['ema_200']:
@@ -160,6 +159,8 @@ class AdvancedSignalGenerator:
             sell_score += 10
             sell_reasons.append(f"У верхней границы BB ({bb_position:.1f}%)")
 
+        logger.info(f"📊 Итоговые баллы: buy={buy_score}, sell={sell_score}, MIN_SCORE={self.MIN_SCORE}")
+
         return {
             'buy_score': buy_score,
             'buy_reasons': buy_reasons,
@@ -175,6 +176,8 @@ class AdvancedSignalGenerator:
             ticker = await self.exchange.fetch_ticker(symbol)
             daily_volume = float(ticker.get('quoteVolume', 0))
 
+            logger.info(f"📊 {symbol}: объем = {daily_volume:,.0f} USDT, нужно {self.MIN_VOLUME:,.0f}")
+
             if daily_volume < self.MIN_VOLUME:
                 logger.debug(f"⏭ {symbol}: низкий объем ({daily_volume:,.0f} USDT)")
                 return None
@@ -187,7 +190,7 @@ class AdvancedSignalGenerator:
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
             # 3. Расчет индикаторов
-            df = await self._calculate_indicators(df, symbol)
+            df = self._calculate_indicators(df, symbol)
             if df is None:
                 return None
 
@@ -197,9 +200,7 @@ class AdvancedSignalGenerator:
             # 4. Оценка условий
             eval_result = self._evaluate_signal_conditions(last, prev)
 
-            # 5. Определение направления
-            direction = None
-            confidence = 0.5
+            logger.info(f"🎯 {symbol}: Проверка условий завершена")
 
             if eval_result['buy_score'] >= eval_result['sell_score'] and eval_result['buy_score'] >= self.MIN_SCORE:
                 direction = "buy"
