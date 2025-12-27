@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import pandas_ta as ta
 from datetime import datetime
+
+from aiogram.exceptions import TelegramBadRequest, TelegramNotFound, TelegramForbiddenError
 from sqlalchemy import select
 from aiogram import Bot
 from aiogram.types import FSInputFile
@@ -54,17 +56,10 @@ def calculate_position_size(deposit, risk_pct, entry, sl):
 # --- 2. ОСНОВНОЙ КЛАСС ВОРКЕРА ---
 
 class MarketWorker:
-    def __init__(self, bot: Bot):
+    def __init__(self, bot: Bot, exchange):
         self.bot = bot
-
-        # Создаем конфигурацию для биржи
-        exchange_config = {
-            'exchange': 'bybit',  # или другая биржа из config
-            'api_key': getattr(config, 'BYBIT_API_KEY', ''),
-            'api_secret': getattr(config, 'BYBIT_API_SECRET', ''),
-        }
-
-        self.gen = AdvancedSignalGenerator(exchange_config=exchange_config, symbols=[])
+        self.exchange = exchange  # Готовый экземпляр биржи
+        self.gen = AdvancedSignalGenerator(exchange=self.exchange, symbols=[])
         self.tracker = SignalTracker(bot)
         self.formatter = EnhancedSignalFormatter()
         self._tasks = []
@@ -87,7 +82,7 @@ class MarketWorker:
             self._tasks.extend([monitor_task, sub_check_task])
 
             for task in self._tasks:
-                task.add_done_callback(self._on_task_completed)
+                task.add_done_callback(MarketWorker._on_task_completed)
 
             logging.info("🕵️ Воркер и задачи мониторинга успешно инициализированы.")
         except Exception as e:
@@ -153,7 +148,8 @@ class MarketWorker:
             # Для тестов можно уменьшить до 60
             await asyncio.sleep(300)
 
-    def _on_task_completed(self, task):
+    @staticmethod
+    def _on_task_completed(task):
         """Перезапуск упавших фоновых задач"""
         try:
             task.result()
@@ -172,10 +168,16 @@ class MarketWorker:
                             "⚠️ *Срок действия вашей PREMIUM подписки истек*\nПродлите доступ, чтобы не пропускать сигналы.",
                             parse_mode="MarkdownV2"
                         )
-                    except:
-                        pass
+                    except (TelegramBadRequest, TelegramNotFound, TelegramForbiddenError) as ex:
+                        # Пользователь заблокировал бота или удален
+                        logging.debug(f"Не удалось отправить уведомление пользователю {uid}: {ex}")
+                    except Exception as ex:
+                        # Другие ошибки
+                        logging.warning(f"Ошибка отправки уведомления пользователю {uid}: {ex}")
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                    raise
             except Exception as e:
-                logging.error(f"Ошибка в subscription_checker: {e}")
+                    logging.error(f"Ошибка в subscription_checker: {e}", exc_info=True)
             await asyncio.sleep(3600)  # Проверка раз в час
 
     async def broadcast_signal(self, signal):
@@ -242,16 +244,16 @@ class MarketWorker:
             users = result.scalars().all()
 
         # --- Г. Функция отправки одному юзеру (внутренняя) ---
-        async def send_to_one_user(user):
+        async def send_to_one_user(user_obj):
             # Проверка фильтра пар
-            user_pairs = [p.strip().upper() for p in user.selected_pairs.split(",")] if user.selected_pairs else []
+            user_pairs = [p.strip().upper() for p in user_obj.selected_pairs.split(",")] if user_obj.selected_pairs else []
             if symbol.upper() not in user_pairs:
                 return False
 
             # Индивидуальный расчет позиции
-            pos_size = calculate_position_size(user.deposit, user.risk_per_trade, signal['entry'], signal['sl'])
+            pos_size = calculate_position_size(user_obj.deposit, user_obj.risk_per_trade, signal['entry'], signal['sl'])
             esc_pos = EnhancedSignalFormatter.escape_md(str(pos_size))
-            esc_risk = EnhancedSignalFormatter.escape_md(str(user.risk_per_trade))
+            esc_risk = EnhancedSignalFormatter.escape_md(str(user_obj.risk_per_trade))
 
             # Добавляем персонализацию к тексту
             final_text = (
@@ -262,13 +264,13 @@ class MarketWorker:
 
             try:
                 if chart_path and os.path.exists(chart_path):
-                    await self.bot.send_photo(user.user_id, photo=FSInputFile(chart_path), caption=final_text,
+                    await self.bot.send_photo(user_obj.user_id, photo=FSInputFile(chart_path), caption=final_text,
                                               parse_mode="MarkdownV2")
                 else:
-                    await self.bot.send_message(user.user_id, final_text, parse_mode="MarkdownV2")
+                    await self.bot.send_message(user_obj.user_id, final_text, parse_mode="MarkdownV2")
                 return True
-            except Exception as e:
-                logging.error(f"🚨 Ошибка отправки юзеру {user.user_id}: {e}")
+            except Exception as exc:  # <- изменили имя
+                logging.error(f"🚨 Ошибка отправки юзеру {user_obj.user_id}: {exc}")
                 return False
 
         # --- Д. Пакетная отправка (Batching) ---
@@ -292,7 +294,11 @@ class MarketWorker:
         if chart_path and os.path.exists(chart_path):
             try:
                 os.remove(chart_path)
-            except:
-                pass
+            except OSError as ex:
+                # Конкретная ошибка файловой системы
+                logging.debug(f"Не удалось удалить файл {chart_path}: {ex}")
+            except Exception as ex:
+                # Другие ошибки (маловероятно, но на всякий случай)
+                logging.debug(f"Неожиданная ошибка при удалении файла {chart_path}: {ex}")
 
         return sent_success
