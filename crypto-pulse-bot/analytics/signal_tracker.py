@@ -1,14 +1,40 @@
 import asyncio
 import logging
-from database import async_session, User
+from database import async_session, User, SignalHistory
 from sqlalchemy import select
 from database import close_signal_in_db, save_new_signal
 
-class SignalTracker:
+logger = logging.getLogger(__name__)
 
+class SignalTracker:
     def __init__(self, bot):
         self.bot = bot
         self.active_signals = []  # Список живых сделок
+
+        asyncio.create_task(self.load_active_signals_from_db())
+
+    async def load_active_signals_from_db(self):
+        """Загружает активные сигналы из базы после перезапуска"""
+        try:
+            async with async_session() as session:
+                result = await session.execute(
+                    select(SignalHistory).where(SignalHistory.status == "OPEN")
+                )
+                signals = result.scalars().all()
+
+                for sig in signals:
+                    # Здесь проблема: в базе нет полей tp и sl!
+                    # Пока создаем заглушку
+                    self.active_signals.append({
+                        'symbol': sig.symbol,
+                        'side': sig.side,
+                        'entry': sig.entry_price,
+                        'tp': sig.tp1,  # Берем tp1 из базы
+                        'sl': sig.sl  # Берем sl из базы
+                    })
+                logger.info(f"✅ Загружено {len(signals)} активных сигналов из БД")
+        except Exception as e:
+            logger.error(f"❌ Ошибка загрузки сигналов из БД: {e}")
 
     async def add_signal(self, signal):
         """Добавляет сигнал в мониторинг"""
