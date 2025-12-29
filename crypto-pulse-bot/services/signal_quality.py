@@ -7,7 +7,6 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-
 class SignalQualityRater:
     def __init__(self):
         self.rating_factors = {
@@ -20,10 +19,10 @@ class SignalQualityRater:
         }
 
         self.rating_thresholds = {
-            'HIGH': 0.75,
-            'MEDIUM': 0.60,
-            'LOW': 0.45,
-            'WEAK': 0.0
+            'HIGH': 0.85,
+            'MEDIUM': 0.7,
+            'LOW': 0.55,
+            'WEAK': 0.4
         }
 
     async def rate_signal(self, signal: Dict, market_data: Dict = None) -> Dict:
