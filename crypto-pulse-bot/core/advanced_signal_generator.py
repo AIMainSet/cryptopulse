@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class AdvancedSignalGenerator:
     def __init__(self, exchange, symbols: List[str] = None):
+        self.btc_trend = "NEUTRAL"
         """Принимаем готовую биржу вместо конфигурации"""
         self.exchange = exchange
 
@@ -18,11 +19,65 @@ class AdvancedSignalGenerator:
         self.signal_rater = SignalQualityRater()
 
         # Конфигурируемые параметры
-        self.MIN_VOLUME = 500_000
-        self.LOOKBACK_BARS = 20
-        self.ATR_SL_MULT = 1.5
-        self.MIN_RR = 1.5
-        self.MIN_SCORE = 30
+        self.MIN_VOLUME = 1_000_000 # Минимальный суточный объем (USDT). Только ликвидные пары.
+        self.LOOKBACK_BARS = 100    # Количество свечей для анализа уровней поддержки/сопротивления
+        self.ATR_SL_MULT = 2.0      # Множитель для стоп-лосса (1.5 = стоп в 1.5 * ATR от цены входа)
+        self.MIN_RR = 2.0           # Минимальное соотношение риск/прибыль (1.0 = риск равен прибыли)
+        self.MIN_SCORE = 40       # Минимальный балл для генерации сигнала
+
+    async def update_btc_trend(self, change_1h_percent):
+        """
+        Вызывай этот метод раз в минуту, передавая изменение BTC за час.
+        """
+        if change_1h_percent < -0.5:
+            self.btc_trend = "DOWN"
+        elif change_1h_percent > 0.5:
+            self.btc_trend = "UP"
+        else:
+            self.btc_trend = "NEUTRAL"
+
+    def validate_signal(self, signal_type, indicators):
+        """
+        Возвращает кортеж (bool is_valid, str reason).
+        True = сигнал хороший, можно торговать.
+        False = сигнал плохой, игнорируем.
+        """
+
+        # --- ФИЛЬТР 1: БИТКОИН (ГЛАВНЫЙ) ---
+        # Если Биткоин падает, запрещаем покупать альткоины
+        if signal_type == 'LONG' and self.btc_trend == 'DOWN':
+            return False, "BTC DUMPING (Risk High)"
+
+        # Если Биткоин растет, опасно шортить
+        if signal_type == 'SHORT' and self.btc_trend == 'UP':
+            return False, "BTC PUMPING (Risk High)"
+
+        # --- ФИЛЬТР 2: ОБЪЕМ (ЛИКВИДНОСТЬ) ---
+        # Нет объема = нет настоящего движения
+        vol = indicators.get('volume', 0)
+        avg_vol = indicators.get('volume_mean_20', 1)
+
+        if vol < (avg_vol * 1.2):
+            return False, f"LOW VOLUME (Cur: {vol:.0f} < Req: {avg_vol * 1.2:.0f})"
+
+        # --- ФИЛЬТР 3: СИЛА ТРЕНДА (ADX) ---
+        # ADX < 20 означает флэт (боковик). Индикаторы врут.
+        adx = indicators.get('adx', 0)
+        if adx < 20:
+            return False, f"WEAK TREND (ADX {adx:.1f} < 20)"
+
+        # --- ФИЛЬТР 4: EMA 200 (ГЛОБАЛЬНЫЙ ТРЕНД) ---
+        # Торгуем только по тренду
+        close = indicators.get('close', 0)
+        ema_200 = indicators.get('ema_200', 0)
+
+        if ema_200 > 0:
+            if signal_type == 'LONG' and close < ema_200:
+                return False, "PRICE BELOW EMA 200 (Don't Long downtrend)"
+            if signal_type == 'SHORT' and close > ema_200:
+                return False, "PRICE ABOVE EMA 200 (Don't Short uptrend)"
+
+        return True, "VALID_SIGNAL"
 
     def update_symbols(self, new_symbols: List[str]):
         """Безопасное обновление списка пар"""
@@ -243,12 +298,23 @@ class AdvancedSignalGenerator:
 
                 support_levels = df['low'].tail(self.LOOKBACK_BARS).nsmallest(3).values
                 if len(support_levels) >= 3:
-                    sorted_sup = sorted(support_levels, reverse=True)
-                    tp1, tp2, tp3 = sorted_sup[0], sorted_sup[1], sorted_sup[2]
-                    if tp1 > entry - risk:
-                        tp1 = entry - risk
+                    valid_supports = [s for s in support_levels if s < entry]
+                    if len(valid_supports) >= 3:
+                        sorted_sup = sorted(valid_supports, reverse=True)  # От ближайшего к дальнему
+                        tp1, tp2, tp3 = sorted_sup[0], sorted_sup[1], sorted_sup[2]
+                    else:
+                        # Если не нашли 3 уровня, используем ATR
+                        tp1 = entry - (atr_val * self.MIN_RR)
+                        tp2 = entry - (atr_val * self.MIN_RR * 1.5)
+                        tp3 = entry - (atr_val * self.MIN_RR * 2)
                 else:
-                    tp1, tp2, tp3 = entry - risk, entry - (risk * 2), entry - (risk * 3)
+                    # Fallback: используем ATR для расчета TP
+                    tp1 = entry - (atr_val * self.MIN_RR)
+                    tp2 = entry - (atr_val * self.MIN_RR * 1.5)
+                    tp3 = entry - (atr_val * self.MIN_RR * 2)
+
+                if tp1 >= entry:
+                    tp1 = entry - (atr_val * self.MIN_RR)
 
             # Проверка минимального RR
             current_rr = (tp1 - entry) / risk if direction == "buy" else (entry - tp1) / risk
@@ -287,8 +353,9 @@ class AdvancedSignalGenerator:
             # 8. Оценка качества
             quality_result = await self.signal_rater.rate_signal(prepared_for_rating)
 
-            if quality_result['signal_level'] in ['WEAK', 'LOW']:
-                logger.info(f"⏭ {symbol} отфильтрован: {quality_result['signal_level']}")
+            # Пропускаем ТОЛЬКО WEAK, но разрешаем LOW
+            if quality_result['signal_level'] == 'WEAK':  # Разрешаем LOW сигналы
+                logger.info(f"⏭ {symbol} отфильтрован: WEAK")
                 return None
 
             # 9. Формирование финального сигнала
