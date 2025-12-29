@@ -1,10 +1,10 @@
 import logging
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import select, String, BigInteger, DateTime, Float, func, Boolean, Column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import select, String, BigInteger, DateTime, Float, func, Boolean, Column, Integer, ForeignKey
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 
 
 class Base(DeclarativeBase):
@@ -17,12 +17,16 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, unique=True)  # ID из Телеграм
     username: Mapped[Optional[str]] = mapped_column(String(100))
-    status: Mapped[str] = mapped_column(String(20), default="FREE")  # FREE, PREMIUM, VIP
+    status: Mapped[str] = mapped_column(String(20), default="FREE")  # FREE, PREMIUM
     subscribed_until: Mapped[Optional[datetime]] = mapped_column(DateTime)
     selected_pairs: Mapped[str] = mapped_column(String, default="BTC/USDT,ETH/USDT")  # Храним через запятую
+    daily_risk_limit: Mapped[float] = mapped_column(Float, default=5.0)  # 5% дневного лимита
+    daily_risk_used: Mapped[float] = mapped_column(Float, default=0.0)
+    max_open_positions: Mapped[int] = mapped_column(Integer, default=5)
+    risk_reset_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
     deposit: Mapped[float] = mapped_column(Float, default=1000.0)
     risk_per_trade: Mapped[float] = mapped_column(Float, default=1.0)  # в процентах
-    is_banned = Column(Boolean, default=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
 # Создаем движок (SQLite — просто и надежно для начала)
 engine = create_async_engine("sqlite+aiosqlite:///database.db")
@@ -35,11 +39,18 @@ class SignalHistory(Base):
     symbol: Mapped[str] = mapped_column(String(20))
     side: Mapped[str] = mapped_column(String(10))  # buy/sell
     entry_price: Mapped[float] = mapped_column(Float)
+    # Цели тейк-профита
+    tp1: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tp2: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tp3: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Стоп-лосс
+    sl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     exit_price: Mapped[Optional[float]] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20), default="OPEN")  # OPEN, TP, SL
     profit_pct: Mapped[Optional[float]] = mapped_column(Float)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
 
 async def check_and_expire_subscriptions():
     """Сбрасывает статус PREMIUM, если срок подписки истек"""
@@ -72,7 +83,12 @@ async def save_new_signal(sig_data: dict):
             symbol=sig_data['symbol'],
             side=sig_data['side'],
             entry_price=sig_data['entry'],
-            status="OPEN"
+            tp1=sig_data.get('tp1'),
+            tp2=sig_data.get('tp2'),
+            tp3=sig_data.get('tp3'),
+            sl=sig_data.get('sl'),
+            status="OPEN",
+            user_id=sig_data.get('user_id', 0)
         )
         session.add(new_sig)
         await session.commit()
