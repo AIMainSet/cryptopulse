@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import multiprocessing
+
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
@@ -19,6 +21,7 @@ async def set_main_menu(bot: Bot):
         BotCommand(command='/help', description='Помощь')
     ]
     await bot.set_my_commands(commands)
+
 
 async def main():
     # Настройка логирования
@@ -74,7 +77,10 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Исправляет ошибку TelegramConflictError при мультипроцессинге
+    multiprocessing.freeze_support()
+
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logging.info("Бот остановлен")
+        print("Бот остановлен!")
