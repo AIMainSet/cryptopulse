@@ -42,6 +42,9 @@ class SignalTracker:
         if any(s['symbol'] == signal['symbol'] for s in self.active_signals):
             return
 
+        if 'tp' not in signal and 'tp1' in signal:
+            signal['tp'] = signal['tp1']
+
         await save_new_signal(signal)
         self.active_signals.append(signal)
         logging.info(f"✅ Сигнал {signal['symbol']} сохранен в БД и трекер")
@@ -59,8 +62,15 @@ class SignalTracker:
 
                 for sig in self.active_signals[:]:  # Итерируемся по копии списка
                     symbol = sig['symbol']
-                    current_price = tickers[symbol]['last']
 
+                    if 'tp' not in sig:
+                        if 'tp1' in sig:
+                            sig['tp'] = sig['tp1']  # Используем tp1 как основной TP
+                        else:
+                            logger.error(f"Сигнал {symbol} не содержит ни 'tp', ни 'tp1'")
+                            continue
+
+                    current_price = tickers[symbol]['last']
                     is_closed = False
                     result_text = ""
 
