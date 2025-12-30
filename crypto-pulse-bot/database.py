@@ -19,7 +19,7 @@ class User(Base):
     status: Mapped[str] = mapped_column(String(20), default="FREE")  # FREE, PREMIUM
     subscribed_until: Mapped[Optional[datetime]] = mapped_column(DateTime)
     selected_pairs: Mapped[str] = mapped_column(String, default="BTC/USDT,ETH/USDT")  # Храним через запятую
-    daily_risk_limit: Mapped[float] = mapped_column(Float, default=5.0)  # 5% дневного лимита
+    daily_risk_limit: Mapped[float] = mapped_column(Float, default=2.0)  # 2% дневного лимита
     daily_risk_used: Mapped[float] = mapped_column(Float, default=0.0)
     max_open_positions: Mapped[int] = mapped_column(Integer, default=5)
     risk_reset_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
