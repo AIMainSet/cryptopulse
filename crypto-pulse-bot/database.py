@@ -46,7 +46,7 @@ class SignalHistory(Base):
     profit_pct: Mapped[Optional[float]] = mapped_column(Float)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
 
 
 class SignalStatistic(Base):
