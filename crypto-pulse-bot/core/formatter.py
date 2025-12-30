@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Optional
+from typing import Dict
 
 
 class EnhancedSignalFormatter:
@@ -7,72 +7,73 @@ class EnhancedSignalFormatter:
     @staticmethod
     def escape_md(text) -> str:
         """Экранирование для MarkdownV2"""
-        if text is None: return ""
+        if text is None:
+            return ""
         text = str(text)
         # Экранируем спецсимволы, кроме тех, что используем для разметки
         escape_chars = r'_*[]()~`>#+-=|{}.!'
         return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
     @staticmethod
-    def format_signal_with_rating(signal: Dict, rating: Optional[Dict] = None) -> str:
-        # 1. Данные и Направление
-        is_long = str(signal.get('direction', 'LONG')).upper() == 'LONG'
-        side_color = "🟢" if is_long else "🔴"
-        direction_text = r"LONG \(ПОКУПКА\)" if is_long else r"SHORT \(ПРОДАЖА\)"
-        arrow = "📈" if is_long else "📉"
+    def format_signal_with_rating(signal_data: Dict) -> str:
+        """Форматирует сигнал с расширенной информацией о качестве"""
+        quality = signal_data.get('quality_report', {})
 
-        # 2. Рейтинг и Прогресс-бар
-        rating_emoji = rating.get('emoji', '⭐') if rating else "⭐"
-        status = EnhancedSignalFormatter.escape_md(rating.get('status', 'ULTRA').upper())
-        conf_val = (rating.get('confidence', 0.5) * 100) if rating else 50.0
-        filled = int(conf_val // 10)
-        bar = "▰" * filled + "▱" * (10 - filled)
-        conf_bar = f"{bar} {conf_val:.1f}%"
+        # Эмодзи для силы сигнала
+        strength_emojis = {
+            'STRONG': '🔥🔥🔥',
+            'HIGH': '🔥🔥',
+            'MEDIUM': '🔥',
+            'LOW': '⚠️',
+            'WEAK': '🚫'
+        }
 
-        # 3. Чистка чисел (Округление)
-        symbol = EnhancedSignalFormatter.escape_md(signal.get('symbol', '').upper())
-        entry = f"{float(signal.get('entry', 0)):.2f}"
-        sl = f"{float(signal.get('sl', 0)):.2f}"
+        strength = quality.get('strength', 'WEAK')
+        emoji = strength_emojis.get(strength, '')
 
-        # 4. Формирование Тейков (с округлением)
-        tp_lines = []
-        for i in range(1, 4):
-            tp_val = signal.get(f'tp{i}')
-            if tp_val:
-                entry_val = float(signal.get('entry', 1))
-                percent = ((float(tp_val) - entry_val) / entry_val) * 100
+        message = f"""
+    {emoji} *{strength} SIGNAL* {emoji}
 
-                val_esc = EnhancedSignalFormatter.escape_md(f"{float(tp_val):.2f}")
-                perc_esc = EnhancedSignalFormatter.escape_md(f"{percent:+.2f}%")
+    *Пара:* `{signal_data['symbol']}`
+    *Направление:* {'🟢 LONG' if signal_data['signal_type'] == 'BUY' else '🔴 SHORT'}
+    *Уверенность:* {signal_data.get('confidence', 0) * 100:.1f}%
 
-                icon = "🎯" if i < 3 else "🏁"
-                prefix = "┣" if i < 3 else "┗"
-                tp_lines.append(f"{prefix} {icon} Цель {i}: `{val_esc}` — *{perc_esc}*")
+    *Цена входа:* `{signal_data['entry_price']:.8f}`
+    *Stop Loss:* `{signal_data['stop_loss']:.8f}` ({abs(signal_data['entry_price'] - signal_data['stop_loss']) / signal_data['entry_price'] * 100:.2f}%)
+    *Take Profit 1:* `{signal_data['take_profit_1']:.8f}`
+    *Take Profit 2:* `{signal_data['take_profit_2']:.8f}`
 
-        tp_text = "\n".join(tp_lines)
-        divider = EnhancedSignalFormatter.escape_md("────────────────────")
+    *Качество сигнала:* {quality.get('percentage', 0):.1f}%
+    *Рекомендация:* {quality.get('recommendation', 'N/A')}
 
-        # 5. Сборка сообщения (Используем чистые перенос строк \n)
-        message = (
-            fr"{side_color} *{rating_emoji} {status} SIGNAL: {symbol}* {side_color}\n"
-            f"{divider}\n"
-            fr"💰 *Пара:* `{symbol}`\n"
-            fr"🎯 *Тип:* {direction_text} {arrow}\n"
-            fr"📥 *ВХОД:* `{EnhancedSignalFormatter.escape_md(entry)}`\n"
-            fr"📊 *Уверенность:* `{EnhancedSignalFormatter.escape_md(conf_bar)}`\n"
-            f"{divider}\n"
-            fr"🎯 *ЦЕЛИ ТЕЙК\-ПРОФИТА:*\n"
-            f"{tp_text}\n\n"
-            fr"🛡 *STOP LOSS:* `{EnhancedSignalFormatter.escape_md(sl)}`\n"
-            f"{divider}\n"
-            fr"⚖️ *РИСК\-МЕНЕДЖМЕНТ:*\n"
-            fr"• Риск: {EnhancedSignalFormatter.escape_md(signal.get('risk', 'Medium'))}\n"
-            fr"• Плечо: {EnhancedSignalFormatter.escape_md(signal.get('leverage', '10x'))}\n"
-            fr"• Позиция: 2\-5% от депозита\n\n"
-            fr"📈 *ОБОСНОВАНИЕ:*\n"
-            fr"_{EnhancedSignalFormatter.escape_md(signal.get('reason', 'Технический анализ'))}_\n\n"
-            fr"🕒 _{EnhancedSignalFormatter.escape_md(signal.get('created_at', 'N/A'))}_"
-        )
+    *Multi-Timeframe анализ:*
+    """
+
+        # Добавляем информацию по каждому ТФ
+        if 'timeframe_analysis' in signal_data:
+            for tf, analysis in signal_data['timeframe_analysis'].items():
+                if analysis['signal'] != 'none':
+                    message += f"  • {tf}: {analysis['signal']} (сила: {analysis['strength']:.2f})\n"
+
+        message += f"\n*Ключевые факторы:*\n"
+
+        # Добавляем топ-3 фактора качества
+        if 'factors' in quality:
+            factors = quality['factors']
+            sorted_factors = sorted(
+                factors.items(),
+                key=lambda x: x[1].get('score', 0),
+                reverse=True
+            )[:3]
+
+            for name, data in sorted_factors:
+                score = data.get('score', 0)
+                max_score = data.get('max', 1)
+                details = data.get('details', {}).get('reason', '')
+                message += f"  • {name}: {score}/{max_score} - {details}\n"
+
+        message += f"\n_Сгенерировано: {signal_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')}_"
+
         return message
 
     @staticmethod
@@ -81,12 +82,3 @@ class EnhancedSignalFormatter:
         if not entry or entry == 0:
             return 0.0
         return ((target - entry) / entry) * 100
-
-    @staticmethod
-    def escape(self, text):
-        if text is None: return ""
-        special_chars = r"\_*[]()~`>#+-=|{}.!"
-        res = str(text)
-        for char in special_chars:
-            res = res.replace(char, f"\\{char}")
-        return res
