@@ -9,51 +9,15 @@ from aiogram.exceptions import TelegramBadRequest, TelegramNotFound, TelegramFor
 from sqlalchemy import select
 from aiogram import Bot
 from aiogram.types import FSInputFile
-
-# Внутренние модули (проверь, что пути совпадают с твоей структурой)
 from core.advanced_signal_generator import AdvancedSignalGenerator
 from analytics.signal_tracker import SignalTracker
 from database import async_session, User, check_and_expire_subscriptions
 from core.chart_gen import create_signal_chart
 from core.formatter import EnhancedSignalFormatter
 import config
+from services.risk_manager import RiskManager
 
-
-# --- 1. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (МАТЕМАТИКА) ---
-
-def calculate_position_size(deposit, risk_pct, entry, sl):
-    """
-    Рассчитывает объем позиции исходя из риска на сделку.
-    Возвращает объем в USDT.
-    """
-    try:
-        d = float(deposit or 0)
-        r = float(risk_pct or 0)
-        e = float(entry or 0)
-        s = float(sl or 0)
-
-        if d <= 0 or r <= 0 or e <= 0:
-            return 0
-
-        # Риск в долларах (например, 10$ при депозите 1000 и риске 1%)
-        risk_money = d * (r / 100)
-
-        # Дистанция стопа в % (0.02 = 2%)
-        stop_dist = abs(e - s) / e
-
-        if stop_dist <= 0:
-            return 0
-
-        # Объем позиции = Риск / Дистанция стопа
-        position_size = risk_money / stop_dist
-
-        return round(position_size, 2)
-    except Exception as err:
-        logging.error(f"⚠️ Ошибка расчета позиции: {err}")
-        return 0
-
-
-# --- 2. ОСНОВНОЙ КЛАСС ВОРКЕРА ---
+# --- ОСНОВНОЙ КЛАСС ВОРКЕРА ---
 
 class MarketWorker:
     def __init__(self, bot: Bot, exchange):
@@ -62,6 +26,7 @@ class MarketWorker:
         self.gen = AdvancedSignalGenerator(exchange=self.exchange, symbols=[])
         self.tracker = SignalTracker(bot)
         self.formatter = EnhancedSignalFormatter()
+        self.risk_manager = RiskManager()
         self._tasks = []
 
     async def start(self):
@@ -71,6 +36,9 @@ class MarketWorker:
         # Инициализация фоновых задач (трекер PNL и проверка подписок)
         try:
             self._tasks = []
+
+            await self.risk_manager.start_daily_reset_scheduler()
+
             monitor_task = asyncio.create_task(
                 self.tracker.start_monitoring(self.gen.exchange),
                 name="SignalTracker"
@@ -216,27 +184,24 @@ class MarketWorker:
             logging.error(f"📈 Не удалось создать график для {symbol}: {e}")
 
         # --- Б. Подготовка текстов ---
-        signal_payload = {
+        signal_data = {
             'symbol': symbol,
-            'direction': 'LONG' if signal['side'].upper() in ['BUY', 'LONG'] else 'SHORT',
-            'entry': signal['entry'],
-            'tp1': signal.get('tp1'),
-            'tp2': signal.get('tp2'),
-            'tp3': signal.get('tp3'),
-            'sl': signal['sl'],
-            'risk': 'Medium',  # Можно сделать динамическим от ATR
-            'leverage': 'Isolated 5x-10x',
-            'reason': signal.get('reason', 'Технический анализ'),
-            'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            'signal_type': 'BUY' if signal['side'].upper() in ['BUY', 'LONG'] else 'SELL',
+            'confidence': signal.get('confidence', 0.94),
+            'entry_price': signal['entry'],
+            'stop_loss': signal['sl'],
+            'take_profit_1': signal.get('tp1'),
+            'take_profit_2': signal.get('tp2') or signal.get('tp3'),
+            'timestamp': datetime.now(),  # Обязательно объект datetime, а не строка
+            'quality_report': {
+                'strength': signal.get('status', 'MEDIUM', 'HIGH', 'ULTRA'),
+                'percentage': signal.get('confidence', 0.94) * 100,
+                'recommendation': 'Торговать' if signal.get('confidence', 0.94) > 0.7 else 'Осторожно',
+                'factors': {}  # Оставьте пустым или заполните при наличии данных
+            }
         }
 
-        rating_data = {
-            'emoji': '💎' if signal.get('status') == 'ULTRA' else '🔥',
-            'status': signal.get('status', 'ULTRA'),
-            'confidence': signal.get('confidence', 0.94)
-        }
-
-        base_text = self.formatter.format_signal_with_rating(signal_payload, rating_data)
+        base_text = self.formatter.format_signal_with_rating(signal_data)
 
         # --- В. Сбор получателей ---
         async with async_session() as session:
@@ -245,35 +210,60 @@ class MarketWorker:
 
         # --- Г. Функция отправки одному юзеру (внутренняя) ---
         async def send_to_one_user(user_obj):
-            # Проверка фильтра пар
-            user_pairs = [p.strip().upper() for p in user_obj.selected_pairs.split(",")] if user_obj.selected_pairs else []
+            # 1. Проверка фильтра пар
+            user_pairs = [p.strip().upper() for p in
+                          user_obj.selected_pairs.split(",")] if user_obj.selected_pairs else []
             if symbol.upper() not in user_pairs:
                 return False
 
-            # Индивидуальный расчет позиции
-            pos_size = calculate_position_size(user_obj.deposit, user_obj.risk_per_trade, signal['entry'], signal['sl'])
+            # 2. Расчет процента риска сигнала (стоп-лосс в %)
+            entry_price = signal['entry']
+            stop_loss = signal['sl']
+            signal_risk_pct = abs(entry_price - stop_loss) / entry_price * 100
+
+            # 3. ПРОВЕРКА ЛИМИТОВ РИСК-МЕНЕДЖМЕНТА
+            risk_check = await self.risk_manager.check_user_limits(
+                user_id=user_obj.id,  # ID из БД (первичный ключ), не путать с user_obj.user_id
+                signal_risk=signal_risk_pct
+            )
+
+            if not risk_check['allowed']:
+                logging.info(f"⛔ Пропуск сигнала для {user_obj.user_id}: {risk_check['reason']}")
+                return False
+
+            # 4. Используем размер позиции от риск-менеджера, а не от calculate_position_size
+            pos_size = risk_check['position_size']
             esc_pos = EnhancedSignalFormatter.escape_md(str(pos_size))
             esc_risk = EnhancedSignalFormatter.escape_md(str(user_obj.risk_per_trade))
 
-            # Добавляем персонализацию к тексту
+            # 5. Добавляем персонализацию к тексту
             final_text = (
                 f"{base_text}\n\n"
                 f"💰 *ВАШ ИНДИВИДУАЛЬНЫЙ РАСЧЕТ:*\n"
                 f"└ Объем сделки: `{esc_pos}` USDT \\(риск {esc_risk}%\\)"
+                f"\n└ Дневной риск использован: `{user_obj.daily_risk_used or 0:.2f}%` из `{user_obj.daily_risk_limit or 2.0}%`"
             )
 
             try:
                 if chart_path and os.path.exists(chart_path):
-                    await self.bot.send_photo(user_obj.user_id, photo=FSInputFile(chart_path), caption=final_text,
-                                              parse_mode="MarkdownV2")
+                    await self.bot.send_photo(user_obj.user_id, photo=FSInputFile(chart_path),
+                                              caption=final_text, parse_mode="MarkdownV2")
                 else:
                     await self.bot.send_message(user_obj.user_id, final_text, parse_mode="MarkdownV2")
+
+                # 6. ОБНОВЛЯЕМ ИСПОЛЬЗОВАННЫЙ ДНЕВНОЙ РИСК
+                await self.risk_manager.update_daily_risk(
+                    user_id=user_obj.id,
+                    risk_amount=signal_risk_pct * (user_obj.risk_per_trade / 100)
+                )
+
+                logging.info(f"✅ Сигнал отправлен {user_obj.user_id}, объем: {pos_size} USDT")
                 return True
-            except Exception as exc:  # <- изменили имя
+            except Exception as exc:
                 logging.error(f"🚨 Ошибка отправки юзеру {user_obj.user_id}: {exc}")
                 return False
 
-        # --- Д. Пакетная отправка (Batching) ---
+        # --- Пакетная отправка (Batching) ---
         # Отправляем пачками по 20 штук, чтобы было быстро, но не убило API
         tasks = []
         for user in users:
