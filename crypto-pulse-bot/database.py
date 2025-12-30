@@ -1,10 +1,9 @@
-import logging
 from sqlalchemy import update
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import select, String, BigInteger, DateTime, Float, func, Boolean, Column, Integer, ForeignKey
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional
 
 
 class Base(DeclarativeBase):
@@ -28,9 +27,6 @@ class User(Base):
     risk_per_trade: Mapped[float] = mapped_column(Float, default=1.0)  # в процентах
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
-# Создаем движок (SQLite — просто и надежно для начала)
-engine = create_async_engine("sqlite+aiosqlite:///database.db")
-async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 class SignalHistory(Base):
     __tablename__ = "signals_history"
@@ -51,6 +47,42 @@ class SignalHistory(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
+
+
+class SignalStatistic(Base):
+    __tablename__ = 'signal_statistics'
+
+    id = Column(Integer, primary_key=True)
+    signal_id = Column(String, unique=True)  # Уникальный ID сигнала
+    symbol = Column(String)
+    direction = Column(String)  # 'buy'/'sell'
+    entry_price = Column(Float)
+    stop_loss = Column(Float)
+    take_profit_1 = Column(Float)
+    take_profit_2 = Column(Float)
+    take_profit_3 = Column(Float)
+    quality_rating = Column(String)  # 'STRONG', 'HIGH', etc
+    quality_score = Column(Float)  # процент
+    generated_at = Column(DateTime)
+    result = Column(String)  # 'TP1', 'TP2', 'TP3', 'SL', 'OPEN', 'EXPIRED'
+    closed_at = Column(DateTime, nullable=True)
+    profit_loss_percent = Column(Float, nullable=True)  # +5.2 или -3.1
+
+    # Метрики качества из SignalQualityRater
+    mtf_consensus_score = Column(Integer, default=0)
+    trend_strength_score = Column(Integer, default=0)
+    volume_score = Column(Integer, default=0)
+    rsi_score = Column(Integer, default=0)
+    risk_reward_score = Column(Integer, default=0)
+
+    def __repr__(self):
+        return f"<SignalStatistic(symbol={self.symbol}, result={self.result})>"
+
+
+# Создаем движок (SQLite — просто и надежно для начала)
+engine = create_async_engine("sqlite+aiosqlite:///database.db")
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+
 
 async def check_and_expire_subscriptions():
     """Сбрасывает статус PREMIUM, если срок подписки истек"""
@@ -120,6 +152,7 @@ async def close_signal_in_db(symbol: str, exit_price: float, status: str):
                 sig.profit_pct = ((entry - exit_p) / entry) * 100
             await session.commit()
 
+
 # Функция инициализации БД (создает файл и таблицы)
 async def init_db():
     async with engine.begin() as conn:
@@ -169,11 +202,13 @@ async def get_all_users():
         result = await session.execute(select(User))
         return result.scalars().all()
 
+
 async def get_total_users_count():
     """Возвращает общее количество пользователей"""
     async with async_session() as session:
         result = await session.execute(select(func.count(User.id)))
         return result.scalar() or 0
+
 
 async def set_user_ban(user_id: int, status: bool):
     """Установить или снять бан"""
@@ -182,6 +217,7 @@ async def set_user_ban(user_id: int, status: bool):
             update(User).where(User.user_id == user_id).values(is_banned=status)
         )
         await session.commit()
+
 
 async def is_user_banned(user_id: int) -> bool:
     """Проверить, забанен ли пользователь"""
