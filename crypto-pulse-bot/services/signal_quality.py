@@ -1,228 +1,390 @@
 """
 Система оценки качества сигналов
 """
-import logging
-from typing import Dict
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Dict, Tuple
+from enum import Enum
+import numpy as np
 
-logger = logging.getLogger(__name__)
+class SignalStrength(Enum):
+    WEAK = "WEAK"       # 0-3 балла
+    LOW = "LOW"         # 4-6 баллов
+    MEDIUM = "MEDIUM"   # 7-8 баллов
+    HIGH = "HIGH"       # 9-10 баллов
+    STRONG = "STRONG"   # 11-12 баллов
 
-class SignalQualityRater:
+
+class EnhancedSignalQualityRater:
+    """Расширенный оценщик качества сигналов"""
+
     def __init__(self):
-        self.rating_factors = {
-            'timeframe_consensus': 0.25,  # Согласованность таймфреймов
-            'volume_confirmation': 0.20,  # Подтверждение объемами
-            'risk_reward_ratio': 0.15,  # Соотношение риск/прибыль
-            'market_structure': 0.15,  # Рыночная структура
-            'volatility_score': 0.10,  # Волатильность
-            'confidence_score': 0.15  # Общая уверенность
+        self.volume_period = 20  # Период для анализа объема
+
+    def rate_signal(self, signal_data: Dict, historical_data: Dict = None) -> Dict:
+        """
+        Оценивает качество сигнала по 10 факторам
+        Возвращает детализированный отчет
+        """
+        if not signal_data:
+            return self._create_empty_rating()
+
+        factors = {}
+        total_score = 0
+        max_possible = 0
+
+        # 1. Multi-timeframe консенсус (0-2 балла)
+        mtf_score, mtf_details = self._rate_mtf_consensus(signal_data)
+        factors['mtf_consensus'] = {
+            'score': mtf_score,
+            'max': 2,
+            'details': mtf_details
+        }
+        total_score += mtf_score
+        max_possible += 2
+
+        # 2. Сила тренда (0-2 балла)
+        trend_score, trend_details = self._rate_trend_strength(signal_data)
+        factors['trend_strength'] = {
+            'score': trend_score,
+            'max': 2,
+            'details': trend_details
+        }
+        total_score += trend_score
+        max_possible += 2
+
+        # 3. Объем и ликвидность (0-2 балла)
+        volume_score, volume_details = self._rate_volume(signal_data, historical_data)
+        factors['volume'] = {
+            'score': volume_score,
+            'max': 2,
+            'details': volume_details
+        }
+        total_score += volume_score
+        max_possible += 2
+
+        # 4. Уровни RSI (0-1 балл)
+        rsi_score, rsi_details = self._rate_rsi(signal_data)
+        factors['rsi'] = {
+            'score': rsi_score,
+            'max': 1,
+            'details': rsi_details
+        }
+        total_score += rsi_score
+        max_possible += 1
+
+        # 5. Соотношение риск/прибыль (0-1 балл)
+        rr_score, rr_details = self._rate_risk_reward(signal_data)
+        factors['risk_reward'] = {
+            'score': rr_score,
+            'max': 1,
+            'details': rr_details
+        }
+        total_score += rr_score
+        max_possible += 1
+
+        # 6. Волатильность (ATR) (0-1 балл)
+        atr_score, atr_details = self._rate_volatility(signal_data)
+        factors['volatility'] = {
+            'score': atr_score,
+            'max': 1,
+            'details': atr_details
+        }
+        total_score += atr_score
+        max_possible += 1
+
+        # 7. Дивергенция (если есть) (0-1 балл)
+        divergence_score, div_details = self._check_divergence(historical_data)
+        factors['divergence'] = {
+            'score': divergence_score,
+            'max': 1,
+            'details': div_details
+        }
+        total_score += divergence_score
+        max_possible += 1
+
+        # 8. Поддержка/сопротивление (0-1 балл)
+        sr_score, sr_details = self._check_support_resistance(signal_data, historical_data)
+        factors['support_resistance'] = {
+            'score': sr_score,
+            'max': 1,
+            'details': sr_details
+        }
+        total_score += sr_score
+        max_possible += 1
+
+        # 9. Время суток (0-1 балл)
+        time_score, time_details = self._rate_time_of_day()
+        factors['market_hours'] = {
+            'score': time_score,
+            'max': 1,
+            'details': time_details
+        }
+        total_score += time_score
+        max_possible += 1
+
+        # 10. Новостной фон (0-1 балл) - можно интегрировать позже
+        news_score, news_details = self._rate_news_background(signal_data['symbol'])
+        factors['news'] = {
+            'score': news_score,
+            'max': 1,
+            'details': news_details
+        }
+        total_score += news_score
+        max_possible += 1
+
+        # Итоговый рейтинг
+        strength = self._calculate_strength(total_score, max_possible)
+
+        return {
+            'strength': strength.value,
+            'total_score': total_score,
+            'max_score': max_possible,
+            'percentage': (total_score / max_possible) * 100 if max_possible > 0 else 0,
+            'factors': factors,
+            'recommendation': self._get_recommendation(strength),
+            'timestamp': datetime.now(timezone.utc)
         }
 
-        self.rating_thresholds = {
-            'HIGH': 0.85,
-            'MEDIUM': 0.7,
-            'LOW': 0.55,
-            'WEAK': 0.4
-        }
+    @staticmethod
+    def _rate_mtf_consensus(signal_data: Dict) -> Tuple[int, Dict]:
+        """Оценивает консенсус между таймфреймами"""
+        if 'timeframe_analysis' not in signal_data:
+            return 0, {'reason': 'No MTF data available'}
 
-    async def rate_signal(self, signal: Dict, market_data: Dict = None) -> Dict:
-        """Оценка качества сигнала"""
+        tf_results = signal_data['timeframe_analysis']
+        signals = []
+
+        for tf, result in tf_results.items():
+            if result['signal'] != 'none':
+                signals.append((tf, result['signal'], result['strength']))
+
+        if len(signals) < 2:
+            return 0, {'reason': 'Less than 2 timeframes confirm'}
+
+        # Проверяем согласованность
+        buy_count = sum(1 for s in signals if s[1] == 'BUY')
+        sell_count = sum(1 for s in signals if s[1] == 'SELL')
+
+        if buy_count == len(signals):  # Все ТФ показывают покупку
+            return 2, {'reason': f'All {len(signals)} timeframes confirm BUY'}
+        elif sell_count == len(signals):  # Все ТФ показывают продажу
+            return 2, {'reason': f'All {len(signals)} timeframes confirm SELL'}
+        elif abs(buy_count - sell_count) >= 2:  # Явное большинство
+            return 1, {'reason': f'Strong majority ({max(buy_count, sell_count)}/{len(signals)})'}
+        else:
+            return 0, {'reason': 'No clear consensus'}
+
+    @staticmethod
+    def _rate_trend_strength(signal_data: Dict) -> Tuple[int, Dict]:
+        """Оценивает силу тренда"""
+        if 'timeframe_analysis' not in signal_data:
+            return 0, {'reason': 'No trend data'}
+
+        tf_results = signal_data['timeframe_analysis']
+        trends = []
+
+        for tf, result in tf_results.items():
+            if 'ema_trend' in result:
+                trends.append(result['ema_trend'])
+
+        # Проверяем согласованность трендов
+        if len(trends) < 2:
+            return 0, {'reason': 'Insufficient trend data'}
+
+        bullish_count = sum(1 for t in trends if t == 'bullish')
+        bearish_count = sum(1 for t in trends if t == 'bearish')
+
+        # Тренд должен быть в направлении сигнала
+        signal_type = signal_data.get('signal_type', '')
+
+        if signal_type == 'BUY' and bullish_count >= 2:
+            return 2, {'reason': f'Strong bullish trend ({bullish_count}/{len(trends)} timeframes)'}
+        elif signal_type == 'SELL' and bearish_count >= 2:
+            return 2, {'reason': f'Strong bearish trend ({bearish_count}/{len(trends)} timeframes)'}
+        elif (signal_type == 'BUY' and bullish_count == 1) or (signal_type == 'SELL' and bearish_count == 1):
+            return 1, {'reason': 'Weak trend alignment'}
+        else:
+            return 0, {'reason': 'Trend contradicts signal'}
+
+    def _rate_volume(self, signal_data: Dict, historical_data: Dict) -> Tuple[int, Dict]:
+        """Оценивает объем"""
+        if not historical_data or 'volumes' not in historical_data:
+            return 0, {'reason': 'No volume data available'}
+
+        current_volume = signal_data.get('volume', 0)
+        volumes = historical_data['volumes']
+
+        if len(volumes) < self.volume_period:
+            return 0, {'reason': 'Insufficient historical volume data'}
+
+        # Вычисляем средний объем
+        avg_volume = np.mean(volumes[-self.volume_period:])
+
+        if current_volume == 0 or avg_volume == 0:
+            return 0, {'reason': 'Invalid volume data'}
+
+        volume_ratio = current_volume / avg_volume
+
+        if volume_ratio > 2.0:
+            return 2, {'reason': f'Volume spike: {volume_ratio:.2f}x average'}
+        elif volume_ratio > 1.5:
+            return 1, {'reason': f'Above average volume: {volume_ratio:.2f}x'}
+        elif volume_ratio < 0.5:
+            return 0, {'reason': f'Low volume: {volume_ratio:.2f}x average (caution)'}
+        else:
+            return 0, {'reason': f'Normal volume: {volume_ratio:.2f}x average'}
+
+    @staticmethod
+    def _rate_rsi(signal_data: Dict) -> Tuple[int, Dict]:
+        """Оценивает уровни RSI"""
+        rsi = signal_data.get('rsi')
+        if not rsi:
+            return 0, {'reason': 'No RSI data'}
+
+        signal_type = signal_data.get('signal_type', '')
+
+        if signal_type == 'BUY':
+            if rsi < 30:
+                return 1, {'reason': f'RSI oversold: {rsi:.1f}'}
+            elif rsi < 35:
+                return 0, {'reason': f'RSI near oversold: {rsi:.1f}'}
+            else:
+                return 0, {'reason': f'RSI not in buy zone: {rsi:.1f}'}
+        elif signal_type == 'SELL':
+            if rsi > 70:
+                return 1, {'reason': f'RSI overbought: {rsi:.1f}'}
+            elif rsi > 65:
+                return 0, {'reason': f'RSI near overbought: {rsi:.1f}'}
+            else:
+                return 0, {'reason': f'RSI not in sell zone: {rsi:.1f}'}
+        else:
+            return 0, {'reason': f'RSI neutral: {rsi:.1f}'}
+
+    @staticmethod
+    def _rate_risk_reward(signal_data: Dict) -> Tuple[int, Dict]:
+        """Оценивает соотношение риск/прибыль"""
         try:
-            ratings = {}
+            entry = float(signal_data.get('entry_price', 0))
+            sl = float(signal_data.get('stop_loss', 0))
+            tp1 = float(signal_data.get('take_profit_1', 0))
 
-            # 1. Оценка согласованности таймфреймов
-            ratings['timeframe_consensus'] = await self.rate_timeframe_consensus(
-                signal.get('timeframes_analyzed', []),
-                signal.get('direction')
-            )
+            if entry == 0 or sl == 0 or tp1 == 0:
+                return 0, {'reason': 'Invalid price levels'}
 
-            # 2. Оценка подтверждения объемами
-            ratings['volume_confirmation'] = await self.rate_volume_confirmation(
-                signal.get('symbol'),
-                signal.get('direction')
-            )
+            risk = abs(entry - sl)
+            reward = abs(tp1 - entry)
 
-            # 3. Оценка соотношения риск/прибыль
-            ratings['risk_reward_ratio'] = self.rate_risk_reward(
-                signal.get('risk_reward', 1)
-            )
+            if risk == 0:
+                return 0, {'reason': 'Zero risk'}
 
-            # 4. Оценка рыночной структуры
-            ratings['market_structure'] = await self.rate_market_structure(
-                signal.get('symbol'),
-                signal.get('direction')
-            )
+            rr_ratio = reward / risk
 
-            # 5. Оценка волатильности
-            ratings['volatility_score'] = self.rate_volatility(
-                signal.get('volatility', '0%')
-            )
-
-            # 6. Оценка уверенности
-            ratings['confidence_score'] = signal.get('confidence', 0.5)
-
-            # Итоговый рейтинг
-            total_rating = sum(
-                rating * self.rating_factors[factor]
-                for factor, rating in ratings.items()
-            )
-
-            # Определяем уровень сигнала
-            signal_level = self.determine_signal_level(total_rating)
-
-            return {
-                'total_rating': total_rating,
-                'signal_level': signal_level,
-                'emoji': self.get_level_emoji(signal_level),
-                'ratings': ratings,
-                'recommendation': self.get_recommendation(signal_level, signal),
-                'is_premium': signal_level in ['HIGH', 'MEDIUM'],
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
+            if rr_ratio >= 2.0:
+                return 1, {'reason': f'Excellent R/R: 1:{rr_ratio:.2f}'}
+            elif rr_ratio >= 1.5:
+                return 0, {'reason': f'Good R/R: 1:{rr_ratio:.2f}'}
+            else:
+                return 0, {'reason': f'Poor R/R: 1:{rr_ratio:.2f}'}
 
         except Exception as e:
-            logger.error(f"Ошибка оценки сигнала: {e}")
-            return {
-                'total_rating': 0.5,
-                'signal_level': 'STANDARD',
-                'emoji': '⭐',
-                'error': str(e)
-            }
+            return 0, {'reason': f'Error calculating R/R: {str(e)}'}
 
-    async def rate_timeframe_consensus(self, timeframes: list, direction: str) -> float:
-        """Оценка согласованности таймфреймов"""
-        if not timeframes:
-            return 0.5
+    @staticmethod
+    def _rate_volatility(signal_data: Dict) -> Tuple[int, Dict]:
+        """Оценивает волатильность на основе ATR"""
+        atr = signal_data.get('atr')
+        current_price = signal_data.get('entry_price', 0)
 
-        # Чем больше таймфреймов проанализировано, тем лучше
-        base_score = min(len(timeframes) / 3, 1.0)
+        if not atr or current_price == 0:
+            return 0, {'reason': 'No volatility data'}
 
-        # Бонус за наличие 4h таймфрейма (более надежный)
-        if '4h' in timeframes:
-            base_score += 0.2
+        atr_percent = (atr / current_price) * 100
 
-        return min(base_score, 1.0)
-
-    async def rate_volume_confirmation(self, symbol: str, direction: str) -> float:
-        """Оценка подтверждения объемами"""
-        # Здесь должна быть логика проверки объемов
-        # Пока возвращаем базовый score
-        return 0.7
-
-    def rate_risk_reward(self, risk_reward: float) -> float:
-        """Оценка соотношения риск/прибыль"""
-        if risk_reward >= 3:
-            return 1.0
-        elif risk_reward >= 2:
-            return 0.8
-        elif risk_reward >= 1.5:
-            return 0.6
-        elif risk_reward >= 1:
-            return 0.4
+        # Идеальная волатильность для торговли: 1-3%
+        if 1.0 <= atr_percent <= 3.0:
+            return 1, {'reason': f'Ideal volatility: {atr_percent:.2f}%'}
+        elif atr_percent < 0.5:
+            return 0, {'reason': f'Low volatility: {atr_percent:.2f}% (may be false breakout)'}
+        elif atr_percent > 5.0:
+            return 0, {'reason': f'High volatility: {atr_percent:.2f}% (increased risk)'}
         else:
-            return 0.2
+            return 0, {'reason': f'Normal volatility: {atr_percent:.2f}%'}
 
-    async def rate_market_structure(self, symbol: str, direction: str, signal_data: Dict = None) -> float:
-        """Оценка рыночной структуры с использованием индикаторов"""
-        if not signal_data:
-            return 0.6  # Возвращаем базовый score если нет данных
+    @staticmethod
+    def _check_divergence(_historical_data: Dict) -> Tuple[int, Dict]:
+        """Проверяет наличие дивергенции"""
+        # Заглушка - нужно реализовать логику обнаружения дивергенции
+        return 0, {'reason': 'Divergence check not implemented yet'}
 
-        score = 0.5  # Базовый score
+    @staticmethod
+    def _check_support_resistance(_signal_data: Dict, _historical_data: Dict) -> Tuple[int, Dict]:
+        """Проверяет уровни поддержки/сопротивления"""
+        # Заглушка - нужно реализовать определение уровней S/R
+        return 0, {'reason': 'S/R analysis not implemented yet'}
 
-        # 1. Оценка по Bollinger Bands
-        bb_position = signal_data.get('bb_position', 'middle')
-        if (direction == 'BUY' and bb_position == 'lower') or \
-                (direction == 'SELL' and bb_position == 'upper'):
-            score += 0.2  # Цена у границы Боллинджера - хорошая точка входа
+    @staticmethod
+    def _rate_time_of_day() -> Tuple[int, Dict]:
+        """Оценивает время суток (торговые сессии)"""
+        hour = datetime.now(timezone.utc).hour
 
-        # 2. Оценка по MACD
-        macd_value = signal_data.get('macd_value', 0)
-        macd_signal = signal_data.get('macd_signal', 0)
+        # Лондонская сессия: 8:00-16:00 UTC
+        # Нью-Йоркская сессия: 13:00-21:00 UTC
+        # Азиатская сессия: 00:00-08:00 UTC
 
-        if (direction == 'BUY' and macd_value > macd_signal) or \
-                (direction == 'SELL' and macd_value < macd_signal):
-            score += 0.15  # MACD подтверждает направление
-
-        # 3. Оценка по Stochastic
-        stoch_k = signal_data.get('stoch_k', 50)
-        if direction == 'BUY' and stoch_k < 30:
-            score += 0.1  # Stochastic в зоне перепроданности для покупки
-        elif direction == 'SELL' and stoch_k > 70:
-            score += 0.1  # Stochastic в зоне перекупленности для продажи
-
-        return min(score, 1.0)  # Ограничиваем максимальный score 1.0
-
-    def rate_volatility(self, volatility_str: str) -> float:
-        """Оценка волатильности"""
-        try:
-            volatility = float(volatility_str.strip('%')) / 100
-
-            # Оптимальная волатильность для торговли: 2-5%
-            if 0.02 <= volatility <= 0.05:
-                return 0.9
-            elif 0.01 <= volatility < 0.02 or 0.05 < volatility <= 0.08:
-                return 0.7
-            elif volatility < 0.01:  # Слишком низкая волатильность
-                return 0.4
-            else:  # Слишком высокая волатильность
-                return 0.3
-        except:
-            return 0.5
-
-    def determine_signal_level(self, rating: float) -> str:
-        """Определение уровня сигнала по рейтингу"""
-        if rating >= self.rating_thresholds['HIGH']:
-            return 'HIGH'
-        elif rating >= self.rating_thresholds['MEDIUM']:
-            return 'MEDIUM'
-        elif rating >= self.rating_thresholds['LOW']:
-            return 'LOW'
+        if 8 <= hour < 16:  # Лондон
+            return 1, {'reason': f'London session ({hour}:00 UTC)'}
+        elif 13 <= hour < 21:  # Нью-Йорк
+            return 1, {'reason': f'New York session ({hour}:00 UTC)'}
+        elif 0 <= hour < 8:  # Азия
+            return 0, {'reason': f'Asian session ({hour}:00 UTC) - lower liquidity'}
         else:
-            return 'WEAK'
+            return 0, {'reason': f'Between sessions ({hour}:00 UTC)'}
 
-    def get_level_emoji(self, level: str) -> str:
-        """Получение emoji для уровня сигнала"""
-        emojis = {
-            'HIGH': '🔥',
-            'MEDIUM': '✅',
-            'LOW': '⚠️',
-            'WEAK': '❌',
-            'STANDARD': '⭐'
-        }
-        return emojis.get(level, '⭐')
+    @staticmethod
+    def _rate_news_background(_symbol: str) -> Tuple[int, Dict]:
+        """Оценивает новостной фон"""
+        # Заглушка - можно интегрировать с CryptoPanic или другим API
+        return 0, {'reason': 'News analysis not implemented yet'}
 
-    def get_recommendation(self, level: str, signal: Dict) -> str:
-        """Получение рекомендации по сигналу"""
+    @staticmethod
+    def _calculate_strength(score: int, max_score: int) -> SignalStrength:
+        """Определяет силу сигнала на основе баллов"""
+        percentage = (score / max_score) * 100 if max_score > 0 else 0
+
+        if percentage >= 90:
+            return SignalStrength.STRONG
+        elif percentage >= 75:
+            return SignalStrength.HIGH
+        elif percentage >= 60:
+            return SignalStrength.MEDIUM
+        elif percentage >= 40:
+            return SignalStrength.LOW
+        else:
+            return SignalStrength.WEAK
+
+    @staticmethod
+    def _get_recommendation(strength: SignalStrength) -> str:
+        """Возвращает рекомендацию на основе силы сигнала"""
         recommendations = {
-            'HIGH': f"Сильный сигнал! Рекомендуется открывать позицию по {signal['symbol']}",
-            'MEDIUM': f"Хороший сигнал. Можно рассматривать сделку по {signal['symbol']}",
-            'LOW': f"Сигнал требует осторожности. Уменьшите размер позиции по {signal['symbol']}",
-            'WEAK': f"Слабый сигнал. Рекомендуется пропустить сделку по {signal['symbol']}",
-            'STANDARD': f"Стандартный сигнал по {signal['symbol']}"
+            SignalStrength.STRONG: "STRONG BUY/SELL - High confidence",
+            SignalStrength.HIGH: "BUY/SELL - Good setup",
+            SignalStrength.MEDIUM: "Consider BUY/SELL - Moderate confidence",
+            SignalStrength.LOW: "Watch for confirmation - Low confidence",
+            SignalStrength.WEAK: "Avoid - Weak setup"
         }
-        return recommendations.get(level, "Сигнал требует дополнительного анализа")
+        return recommendations.get(strength, "No recommendation")
 
-    def generate_quality_report(self, signal: Dict, rating: Dict) -> str:
-        """Генерация отчета о качестве сигнала"""
-        report = f"""
-📊 <b>ОТЧЕТ О КАЧЕСТВЕ СИГНАЛА</b>
+    @staticmethod
+    def _create_empty_rating() -> Dict:
+        """Создает пустой рейтинг"""
+        return {
+            'strength': SignalStrength.WEAK.value,
+            'total_score': 0,
+            'max_score': 12,
+            'percentage': 0,
+            'factors': {},
+            'recommendation': 'No signal data',
+            'timestamp': datetime.now(timezone.utc)
+        }
 
-<b>Основные метрики:</b>
-• Общий рейтинг: {rating['total_rating']:.2%}
-• Уровень сигнала: {rating['signal_level']} {rating['emoji']}
-• Премиум-сигнал: {'✅ Да' if rating['is_premium'] else '❌ Нет'}
-
-<b>Детальная оценка:</b>
-• Согласованность таймфреймов: {rating['ratings']['timeframe_consensus']:.2%}
-• Подтверждение объемами: {rating['ratings']['volume_confirmation']:.2%}
-• Риск/прибыль: {rating['ratings']['risk_reward_ratio']:.2%}
-• Рыночная структура: {rating['ratings']['market_structure']:.2%}
-• Волатильность: {rating['ratings']['volatility_score']:.2%}
-• Уверенность: {rating['ratings']['confidence_score']:.2%}
-
-<b>Рекомендация:</b>
-{rating['recommendation']}
-
-<i>Отчет сгенерирован: {rating['timestamp']}</i>
-"""
-        return report
+SignalQualityRater = EnhancedSignalQualityRater
