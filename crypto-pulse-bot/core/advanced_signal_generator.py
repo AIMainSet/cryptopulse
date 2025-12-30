@@ -4,7 +4,8 @@ import asyncio
 import logging
 from typing import Optional, Dict, List
 from services.signal_quality import SignalQualityRater
-from datetime import datetime
+from datetime import datetime, timezone  # Добавляем timezone
+from analytics.multi_timeframe_analyzer import MultiTimeframeAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,110 @@ class AdvancedSignalGenerator:
         self.signal_rater = SignalQualityRater()
 
         # Конфигурируемые параметры
-        self.MIN_VOLUME = 1_000_000 # Минимальный суточный объем (USDT). Только ликвидные пары.
-        self.LOOKBACK_BARS = 100    # Количество свечей для анализа уровней поддержки/сопротивления
-        self.ATR_SL_MULT = 2.0      # Множитель для стоп-лосса (1.5 = стоп в 1.5 * ATR от цены входа)
-        self.MIN_RR = 2.0           # Минимальное соотношение риск/прибыль (1.0 = риск равен прибыли)
-        self.MIN_SCORE = 40       # Минимальный балл для генерации сигнала
+        self.MIN_VOLUME = 1_000_000  # Минимальный суточный объем (USDT). Только ликвидные пары.
+        self.LOOKBACK_BARS = 100  # Количество свечей для анализа уровней поддержки/сопротивления
+        self.ATR_SL_MULT = 2.0  # Множитель для стоп-лосса (1.5 = стоп в 1.5 * ATR от цены входа)
+        self.MIN_RR = 2.0  # Минимальное соотношение риск/прибыль (1.0 = риск равен прибыли)
+        self.MIN_SCORE = 40  # Минимальный балл для генерации сигнала
+
+        self.mtf_analyzer = MultiTimeframeAnalyzer(self.exchange)
+
+    @staticmethod
+    def _create_dataframe(ohlcv) -> pd.DataFrame:
+        """Создаёт DataFrame из OHLCV данных"""
+        df = pd.DataFrame(
+            ohlcv,
+            columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        )
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        return df
+
+    async def _get_historical_volumes(self, symbol: str, timeframe: str = '1h', limit: int = 50) -> List[float]:
+        """Получает исторические объемы для анализа"""
+        try:
+            ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            return df['volume'].tolist()
+        except Exception as e:
+            logger.error(f"Ошибка получения исторических объемов для {symbol}: {e}")
+            return []
+
+    async def analyze_pair(self, symbol: str):
+        """Основной метод анализа с multi-timeframe"""
+        try:
+            # 1. Получаем multi-timeframe анализ
+            mtf_result = await self.mtf_analyzer.analyze_all_timeframes(symbol)
+
+            # 2. Проверяем, есть ли сильный сигнал
+            if mtf_result['final_signal'] == 'none':
+                return None
+
+            if mtf_result['confidence'] < 0.6:  # Минимальная уверенность
+                return None
+
+            # 3. Получаем детализированные данные для основного ТФ (1h)
+            ohlcv = await self.exchange.fetch_ohlcv(symbol, '1h', limit=200)
+            df = self._create_dataframe(ohlcv)
+
+            # Используем упрощенный расчет индикаторов для этого метода
+            df = self._calculate_basic_indicators(df)
+
+            # 4. Получаем текущую цену и объем
+            ticker = await self.exchange.fetch_ticker(symbol)
+            current_price = ticker['last']
+            volume = ticker['baseVolume']
+
+            # 5. Рассчитываем уровни TP/SL на основе ATR
+            atr = df['atr'].iloc[-1]
+            if mtf_result['final_signal'] == 'BUY':
+                entry_price = current_price
+                stop_loss = entry_price - (atr * 1.5)
+                take_profit_1 = entry_price + (atr * 1.0)
+                take_profit_2 = entry_price + (atr * 2.0)
+            else:  # SELL
+                entry_price = current_price
+                stop_loss = entry_price + (atr * 1.5)
+                take_profit_1 = entry_price - (atr * 1.0)
+                take_profit_2 = entry_price - (atr * 2.0)
+
+            # 6. Собираем сигнал
+            signal = {
+                'symbol': symbol,
+                'signal_type': mtf_result['final_signal'],
+                'entry_price': entry_price,
+                'stop_loss': stop_loss,
+                'take_profit_1': take_profit_1,
+                'take_profit_2': take_profit_2,
+                'timestamp': datetime.now(timezone.utc),  # Исправлено на timezone-aware
+                'confidence': mtf_result['confidence'],
+                'timeframe_analysis': mtf_result['timeframe_results'],
+                'volume': volume,
+                'atr': atr,
+                'rsi': df['rsi'].iloc[-1]
+            }
+
+            # 7. Получаем исторические данные для анализа объема
+            historical_volumes = await self._get_historical_volumes(symbol, '1h', 50)
+            historical_data = {'volumes': historical_volumes}
+
+            # 8. Оцениваем качество сигнала (используем self.signal_rater)
+            quality_report = self.signal_rater.rate_signal(signal, historical_data)
+
+            # 9. Добавляем оценку качества в сигнал
+            signal['quality_report'] = quality_report
+            signal['quality_rating'] = quality_report['strength']
+            signal['quality_score'] = quality_report['percentage']
+
+            # 10. Фильтруем слабые сигналы
+            if quality_report['strength'] in ['WEAK', 'LOW']:
+                logger.info(f"Слабый сигнал для {symbol}: {quality_report['strength']}")
+                return None
+
+            return signal
+
+        except Exception as e:
+            logger.error(f"Ошибка анализа {symbol}: {e}", exc_info=True)
+            return None
 
     async def update_btc_trend(self, change_1h_percent):
         """
@@ -95,6 +195,21 @@ class AdvancedSignalGenerator:
                         (f" и еще {len(self.symbols) - 5}" if len(self.symbols) > 5 else ""))
 
     @staticmethod
+    def _calculate_basic_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Упрощенный расчет индикаторов для analyze_pair"""
+        try:
+            # Базовые индикаторы
+            df['rsi'] = ta.rsi(df['close'], length=14)
+            df['ema_20'] = ta.ema(df['close'], length=20)
+            df['ema_50'] = ta.ema(df['close'], length=50)
+            df['ema_200'] = ta.ema(df['close'], length=200)
+            df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+            return df
+        except Exception as e:
+            logger.error(f"Ошибка расчета индикаторов: {e}")
+            return df
+
+    @staticmethod
     def _calculate_indicators(df: pd.DataFrame, symbol: str) -> Optional[pd.DataFrame]:
         """Безопасный расчет всех индикаторов"""
         try:
@@ -116,7 +231,7 @@ class AdvancedSignalGenerator:
             df['macd_hist'] = macd_df['MACDh_12_26_9']
 
             # Bollinger Bands
-            bb_df = ta.bbands(df['close'], length=20, std=2) # type: ignore
+            bb_df = ta.bbands(df['close'], length=20, std=2)  # type: ignore
             # Ищем правильные имена колонок
             for suffix in ['_20_2.0', '_20_2']:
                 upper_col = f'BBU{suffix}'
@@ -351,14 +466,14 @@ class AdvancedSignalGenerator:
             }
 
             # 8. Оценка качества
-            quality_result = await self.signal_rater.rate_signal(prepared_for_rating)
+            quality_result = self.signal_rater.rate_signal(prepared_for_rating)
 
-            # Пропускаем ТОЛЬКО WEAK, но разрешаем LOW
-            if quality_result['signal_level'] == 'WEAK':  # Разрешаем LOW сигналы
-                logger.info(f"⏭ {symbol} отфильтрован: WEAK")
+            # 9. Фильтрация по качеству (используем новые ключи)
+            if quality_result['strength'] in ['WEAK', 'LOW']:
+                logger.info(f"⏭ {symbol} отфильтрован: {quality_result['strength']}")
                 return None
 
-            # 9. Формирование финального сигнала
+            # 10. Формирование финального сигнала (обновленные ключи)
             signal = {
                 'symbol': symbol,
                 'side': direction,
@@ -368,17 +483,18 @@ class AdvancedSignalGenerator:
                 'confidence': confidence,
                 'reason': " | ".join(reasons),
                 'volume_24h': daily_volume,
-                'quality_rating': quality_result['total_rating'],
-                'signal_level': quality_result['signal_level'],
-                'quality_emoji': quality_result['emoji'],
-                'quality_report': self.signal_rater.generate_quality_report(prepared_for_rating, quality_result),
+                # Обновленные ключи из нового SignalQualityRater
+                'quality_rating': quality_result['strength'],
+                'quality_score': quality_result['percentage'],
+                'quality_factors': quality_result.get('factors', {}),
+                'quality_recommendation': quality_result.get('recommendation', ''),
                 'risk_reward_ratio': risk_reward,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()  # Исправлено
             }
 
-            logger.info(f"✅ {quality_result['signal_level']} сигнал {symbol}: {direction.upper()} "
+            logger.info(f"✅ {quality_result['strength']} сигнал {symbol}: {direction.upper()} "
                         f"(score: {eval_result['buy_score'] if direction == 'buy' else eval_result['sell_score']}, "
-                        f"rating: {quality_result['total_rating']:.1%})")
+                        f"rating: {quality_result['percentage']:.1f}%)")
 
             return signal
 
