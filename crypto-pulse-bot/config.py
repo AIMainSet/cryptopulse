@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     )
 
     # Риск-менеджмент
-    DEFAULT_DAILY_RISK_LIMIT: float = 5.0  # 5%
+    DEFAULT_DAILY_RISK_LIMIT: float = 2.0  # 2%
     DEFAULT_RISK_PER_TRADE: float = 1.0  # 1%
     DEFAULT_MAX_POSITIONS: int = 5
 
