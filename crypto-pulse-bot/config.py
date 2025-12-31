@@ -5,17 +5,6 @@ import sentry_sdk
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
-def init_sentry():
-    if config.SENTRY_DSN:
-        sentry_sdk.init(
-            dsn=config.SENTRY_DSN,
-            integrations=[
-                AsyncioIntegration(),
-                LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
-            ],
-            traces_sample_rate=1.0,
-            environment="production" if not config.DEBUG else "development",
-        )
 class Settings(BaseSettings):
     BOT_TOKEN: str
     ADMIN_IDS: List[int]
@@ -49,3 +38,15 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
 config = Settings()
+
+def init_sentry():
+    if config.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=config.SENTRY_DSN,
+            integrations=[
+                AsyncioIntegration(),
+                LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
+            ],
+            traces_sample_rate=1.0,
+            environment="production" if not config.DEBUG else "development",
+        )
